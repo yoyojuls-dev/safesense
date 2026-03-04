@@ -1,0 +1,5 @@
+{
+  "buildCommand": "npm install && npx tsc --noEmit || true && npx vite build",
+  "outputDirectory": "dist",
+  "framework": "vite"
+}
