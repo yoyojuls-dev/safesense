@@ -92,8 +92,12 @@ const WebcamDetector: React.FC<WebcamDetectorProps> = ({
                 style={styles.captureBtn}
                 title="Flip Camera"
                 onClick={() => {
-                  setFacingMode(f => f === 'environment' ? 'user' : 'environment');
-                  if (isActive) { stop(); setTimeout(() => start(), 300); }
+                  const newFacing = facingMode === 'environment' ? 'user' : 'environment';
+                  setFacingMode(newFacing);
+                  // Stop current stream then restart with new facing mode passed directly
+                  // (don't rely on state update which may not have propagated yet)
+                  stop();
+                  setTimeout(() => start(newFacing), 400);
                 }}
               >
                 🔄
@@ -113,7 +117,7 @@ const WebcamDetector: React.FC<WebcamDetectorProps> = ({
       {/* Controls row */}
       <div className="ss-controls" style={styles.controls}>
         {!isActive ? (
-          <button style={styles.btnPrimary} onClick={start}>
+          <button style={styles.btnPrimary} onClick={() => start()}>
             ▶ Start Camera
           </button>
         ) : (

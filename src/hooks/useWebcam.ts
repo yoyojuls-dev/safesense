@@ -22,7 +22,7 @@ interface UseWebcamReturn {
   canvasRef: React.RefObject<HTMLCanvasElement>;
   isActive: boolean;
   fps: number;
-  start: () => Promise<void>;
+  start: (overrideFacing?: 'user' | 'environment') => Promise<void>;
   stop: () => void;
   takeScreenshot: () => void;
   error: string | null;
@@ -128,7 +128,8 @@ export function useWebcam({
   }, [onDetections]);
 
   // ── Start ──────────────────────────────────────────────────────────────────
-  const start = useCallback(async () => {
+  const start = useCallback(async (overrideFacing?: 'user' | 'environment') => {
+    const activeFacing = overrideFacing ?? facingMode;
     setError(null);
     try {
       const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
@@ -138,7 +139,7 @@ export function useWebcam({
         // On mobile: use facingMode directly — much faster than device enumeration
         finalStream = await navigator.mediaDevices.getUserMedia({
           video: {
-            facingMode: { ideal: facingMode },
+            facingMode: { ideal: activeFacing },
             width:      { ideal: 1280 },
             height:     { ideal: 720  },
             frameRate:  { ideal: 30, min: 15 },
