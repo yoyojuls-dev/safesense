@@ -13,6 +13,7 @@ interface UseWebcamOptions {
   isDemoMode: boolean;
   confidenceThreshold: number;
   mirrored: boolean;
+  facingMode?: 'user' | 'environment';
   onDetections: (dets: Detection[], thumbnail?: string) => void;
 }
 
@@ -79,6 +80,7 @@ export function useWebcam({
   isDemoMode,
   confidenceThreshold,
   mirrored,
+  facingMode = 'environment',
   onDetections,
 }: UseWebcamOptions): UseWebcamReturn {
   const videoRef         = useRef<HTMLVideoElement>(null);
@@ -129,34 +131,46 @@ export function useWebcam({
   const start = useCallback(async () => {
     setError(null);
     try {
-      // Step 1: open with default constraints first — fast, no label lookup needed
-      const initialStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width:     { ideal: 1280 },
-          height:    { ideal: 720  },
-          frameRate: { ideal: 30, min: 15 },  // start at 30fps — less GPU pressure on warmup
-        },
-      });
+      const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+      let finalStream: MediaStream;
 
-      // Step 2: now that we have permission, enumerate devices (labels are populated)
-      const devices  = await navigator.mediaDevices.enumerateDevices();
-      const bestId   = pickBestDevice(devices);
-      const currentId = initialStream.getVideoTracks()[0]
-        .getSettings().deviceId;
-
-      let finalStream = initialStream;
-
-      // Step 3: if a better camera exists and it's not already selected, switch
-      if (bestId && bestId !== currentId) {
-        initialStream.getTracks().forEach(t => t.stop());
+      if (isMobile) {
+        // On mobile: use facingMode directly — much faster than device enumeration
         finalStream = await navigator.mediaDevices.getUserMedia({
           video: {
-            deviceId:  { exact: bestId },
+            facingMode: { ideal: facingMode },
+            width:      { ideal: 1280 },
+            height:     { ideal: 720  },
+            frameRate:  { ideal: 30, min: 15 },
+          },
+        });
+      } else {
+        // On desktop: pick best device (prefer external camera)
+        const initialStream = await navigator.mediaDevices.getUserMedia({
+          video: {
             width:     { ideal: 1280 },
             height:    { ideal: 720  },
             frameRate: { ideal: 30, min: 15 },
           },
         });
+
+        const devices   = await navigator.mediaDevices.enumerateDevices();
+        const bestId    = pickBestDevice(devices);
+        const currentId = initialStream.getVideoTracks()[0].getSettings().deviceId;
+
+        if (bestId && bestId !== currentId) {
+          initialStream.getTracks().forEach(t => t.stop());
+          finalStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              deviceId:  { exact: bestId },
+              width:     { ideal: 1280 },
+              height:    { ideal: 720  },
+              frameRate: { ideal: 30, min: 15 },
+            },
+          });
+        } else {
+          finalStream = initialStream;
+        }
       }
 
       streamRef.current = finalStream;

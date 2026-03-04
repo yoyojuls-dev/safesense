@@ -1,0 +1,24 @@
+description: Ultralytics final model trained on /content/datasets/Lethal-weapon-mergedf-5/data.yaml
+author: Ultralytics
+date: '2026-03-02T08:14:49.075537'
+version: 8.4.19
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: detect
+batch: 1
+imgsz:
+- 640
+- 640
+names:
+  0: Bladed Weapon
+  1: Explosive
+  2: Firearm
+  3: Projectile Weapon
+args:
+  batch: 1
+  half: false
+  int8: false
+  nms: false
+channels: 3
+end2end: false

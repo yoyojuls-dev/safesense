@@ -17,9 +17,11 @@ const WebcamDetector: React.FC<WebcamDetectorProps> = ({
   onDetections,
 }) => {
   const [mirrored, setMirrored] = useState(false);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
 
   const { videoRef, canvasRef, isActive, fps, start, stop, takeScreenshot, error, cameraLabel } =
-    useWebcam({ model, isDemoMode, confidenceThreshold, mirrored, onDetections });
+    useWebcam({ model, isDemoMode, confidenceThreshold, mirrored, facingMode, onDetections });
 
   return (
     <div style={styles.wrapper}>
@@ -84,10 +86,23 @@ const WebcamDetector: React.FC<WebcamDetectorProps> = ({
               </div>
             )}
 
-            {/* Capture shortcut inside the frame */}
-            <button style={styles.captureBtn} onClick={takeScreenshot} title="Capture">
-              ⊙
-            </button>
+            {/* Capture shortcut OR flip camera on mobile */}
+            {isMobile ? (
+              <button
+                style={styles.captureBtn}
+                title="Flip Camera"
+                onClick={() => {
+                  setFacingMode(f => f === 'environment' ? 'user' : 'environment');
+                  if (isActive) { stop(); setTimeout(() => start(), 300); }
+                }}
+              >
+                🔄
+              </button>
+            ) : (
+              <button style={styles.captureBtn} onClick={takeScreenshot} title="Capture">
+                ⊙
+              </button>
+            )}
           </>
         )}
       </div>
