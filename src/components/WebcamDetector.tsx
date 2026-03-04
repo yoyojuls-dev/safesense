@@ -23,7 +23,17 @@ const WebcamDetector: React.FC<WebcamDetectorProps> = ({
 
   return (
     <div style={styles.wrapper}>
-      <div style={styles.viewport}>
+      <style>{`
+        @media (max-width: 600px) {
+          .ss-viewport { min-height: 260px !important; }
+          .ss-controls { flex-wrap: wrap; }
+          .ss-mirror-btn { flex: 1 1 40%; }
+        }
+        @media (max-width: 400px) {
+          .ss-capture-btn { width: 30px !important; height: 30px !important; font-size: 0.95rem !important; }
+        }
+      `}</style>
+      <div className="ss-viewport" style={styles.viewport}>
 
         {/* Hidden video element — source for canvas drawing */}
         <video
@@ -86,7 +96,7 @@ const WebcamDetector: React.FC<WebcamDetectorProps> = ({
       {error && <div style={styles.error}>⚠ {error}</div>}
 
       {/* Controls row */}
-      <div style={styles.controls}>
+      <div className="ss-controls" style={styles.controls}>
         {!isActive ? (
           <button style={styles.btnPrimary} onClick={start}>
             ▶ Start Camera

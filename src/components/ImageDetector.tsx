@@ -126,7 +126,14 @@ const ImageDetector: React.FC<ImageDetectorProps> = ({
 
   return (
     <div style={styles.wrapper}>
+      <style>{`
+        @media (max-width: 600px) {
+          .ss-dropzone { min-height: 260px !important; }
+          .ss-controls-btn { font-size: 0.62rem !important; padding: 10px 0 !important; }
+        }
+      `}</style>
       <div
+        className="ss-dropzone"
         style={{
           ...styles.dropZone,
           borderColor: isDragOver ? '#ff2020' : '#252525',

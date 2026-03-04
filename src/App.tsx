@@ -23,19 +23,14 @@ const App: React.FC = () => {
       if (dets.length > 0) {
         setAlertFlash(true);
         setTimeout(() => setAlertFlash(false), 300);
-
-        // Add to log only when there's a thumbnail (real detection event, not slider re-run)
         if (thumbnail) {
-          setLog(prev => [
-            ...prev,
-            {
-              id:         ++logIdRef.current,
-              timestamp:  new Date(),
-              detections: dets,
-              thumbnail,
-              source:     mode,
-            },
-          ]);
+          setLog(prev => [...prev, {
+            id: ++logIdRef.current,
+            timestamp: new Date(),
+            detections: dets,
+            thumbnail,
+            source: mode,
+          }]);
         }
       }
     },
@@ -48,12 +43,14 @@ const App: React.FC = () => {
     <>
       <style>{`
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
           background: #0a0a0a;
           color: #d8d8d8;
           font-family: 'DM Sans', sans-serif;
           min-height: 100vh;
         }
+
         body::before {
           content: '';
           position: fixed; inset: 0;
@@ -61,11 +58,14 @@ const App: React.FC = () => {
           pointer-events: none;
           z-index: 9999;
         }
-        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
-        @keyframes spin  { to { transform: rotate(360deg); } }
+
+        @keyframes pulse   { 0%,100% { opacity:1; } 50% { opacity:0.35; } }
+        @keyframes spin    { to { transform: rotate(360deg); } }
         @keyframes slideIn { from { opacity:0; transform:translateX(-8px); } to { opacity:1; transform:translateX(0); } }
+
         button:hover  { opacity: 0.88; }
         button:active { transform: scale(0.98); }
+
         input[type="range"] {
           -webkit-appearance: none; appearance: none;
           width: 100%; height: 3px;
@@ -80,33 +80,163 @@ const App: React.FC = () => {
           width:14px; height:14px; border-radius:50%;
           background:#ff2020; border:none; box-shadow:0 0 8px rgba(255,32,32,0.5);
         }
+
         canvas { display: block; }
         code { font-family: 'Space Mono', monospace; }
+
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: #0e0e0e; }
         ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+
+        /* ── Layout ── */
+        .ss-app {
+          max-width: 1380px;
+          margin: 0 auto;
+          padding: 0 24px;
+          display: grid;
+          grid-template-rows: auto 1fr auto;
+          min-height: 100vh;
+        }
+
+        .ss-main {
+          display: grid;
+          grid-template-columns: 1fr 310px;
+          gap: 20px;
+          padding: 22px 0;
+          align-items: start;
+        }
+
+        .ss-detection-area {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+          min-width: 0;
+        }
+
+        .ss-tabs {
+          display: flex;
+          gap: 4px;
+          background: #0e0e0e;
+          padding: 4px;
+          border-radius: 8px;
+          border: 1px solid #252525;
+        }
+
+        .ss-tab {
+          flex: 1;
+          padding: 11px 16px;
+          border: none;
+          background: transparent;
+          font-family: 'Space Mono', monospace;
+          font-size: 0.72rem;
+          font-weight: 600;
+          letter-spacing: 0.06em;
+          cursor: pointer;
+          border-radius: 6px;
+          transition: all 0.18s;
+          color: #888;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .ss-tab.active {
+          background: #ff2020;
+          color: #fff;
+          box-shadow: 0 0 14px rgba(255,32,32,0.35);
+        }
+
+        .ss-sidebar {
+          display: flex;
+          flex-direction: column;
+          gap: 14px;
+          position: sticky;
+          top: 20px;
+        }
+
+        .ss-footer {
+          padding: 16px 0;
+          border-top: 1px solid #1e1e1e;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-family: 'Space Mono', monospace;
+          font-size: 0.62rem;
+          color: #707070;
+          gap: 12px;
+        }
+
+        .ss-footer-warn { color: #b06000; }
+
+        /* ── Tablet (≤900px) ── */
+        @media (max-width: 900px) {
+          .ss-main {
+            grid-template-columns: 1fr;
+          }
+          .ss-sidebar {
+            position: static;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+          }
+          .ss-sidebar > *:last-child {
+            grid-column: 1 / -1;
+          }
+        }
+
+        /* ── Mobile (≤600px) ── */
+        @media (max-width: 600px) {
+          .ss-app {
+            padding: 0 14px;
+          }
+          .ss-main {
+            gap: 14px;
+            padding: 14px 0;
+          }
+          .ss-tab {
+            font-size: 0.62rem;
+            padding: 10px 8px;
+            letter-spacing: 0.02em;
+          }
+          .ss-sidebar {
+            grid-template-columns: 1fr;
+          }
+          .ss-footer {
+            flex-direction: column;
+            text-align: center;
+            gap: 6px;
+            font-size: 0.58rem;
+          }
+        }
+
+        /* ── Small mobile (≤400px) ── */
+        @media (max-width: 400px) {
+          .ss-tab {
+            font-size: 0.55rem;
+            padding: 9px 6px;
+          }
+        }
       `}</style>
 
       {/* Alert flash bar */}
       <div style={{
-        position:'fixed', top:0, left:0, right:0, height:3,
-        background:'#ff2020',
+        position: 'fixed', top: 0, left: 0, right: 0, height: 3,
+        background: '#ff2020',
         transform: alertFlash ? 'scaleX(1)' : 'scaleX(0)',
-        transformOrigin:'left', transition:'transform 0.1s', zIndex:10000,
+        transformOrigin: 'left', transition: 'transform 0.1s', zIndex: 10000,
       }} />
 
-      <div style={styles.app}>
+      <div className="ss-app">
         <Header modelStatus={status} backend={backend} />
 
-        <main style={styles.main}>
-          {/* Left — detection + log */}
-          <div style={styles.detectionArea}>
-            {/* Mode tabs */}
-            <div style={styles.tabs}>
+        <main className="ss-main">
+          {/* Left — detector + log */}
+          <div className="ss-detection-area">
+            <div className="ss-tabs">
               {(['image', 'webcam'] as AppMode[]).map((m) => (
                 <button
                   key={m}
-                  style={{ ...styles.tab, ...(mode === m ? styles.tabActive : styles.tabInactive) }}
+                  className={`ss-tab${mode === m ? ' active' : ''}`}
                   onClick={() => { setMode(m); setDetections([]); }}
                 >
                   {m === 'image' ? '📷  Image Analysis' : '🎥  Real-Time Detection'}
@@ -130,17 +260,13 @@ const App: React.FC = () => {
               />
             )}
 
-            {/* Detection log — shown below the detector */}
             {log.length > 0 && (
-              <DetectionLog
-                entries={log}
-                onClear={() => setLog([])}
-              />
+              <DetectionLog entries={log} onClear={() => setLog([])} />
             )}
           </div>
 
           {/* Right — sidebar */}
-          <aside style={styles.sidebar}>
+          <aside className="ss-sidebar">
             <ModelPanel
               status={status}
               backend={backend}
@@ -153,46 +279,13 @@ const App: React.FC = () => {
           </aside>
         </main>
 
-        <footer style={styles.footer}>
-          <span>SAFESENSE © TUP.EDU.PH</span>
-          <span style={styles.footerWarn}>⚠ Educational &amp; security research use only</span>
+        <footer className="ss-footer">
+          <span>SAFESENSE © 2025 — MIT License</span>
+          <span className="ss-footer-warn">⚠ Educational &amp; security research use only</span>
         </footer>
       </div>
     </>
   );
-};
-
-const styles: Record<string, React.CSSProperties> = {
-  app: {
-    maxWidth: 1380, margin: '0 auto', padding: '0 24px',
-    display: 'grid', gridTemplateRows: 'auto 1fr auto', minHeight: '100vh',
-  },
-  main: {
-    display: 'grid', gridTemplateColumns: '1fr 310px',
-    gap: 20, padding: '22px 0', alignItems: 'start',
-  },
-  detectionArea: { display: 'flex', flexDirection: 'column', gap: 14 },
-  tabs: {
-    display: 'flex', gap: 4,
-    background: '#0e0e0e', padding: 4, borderRadius: 8, border: '1px solid #252525',
-  },
-  tab: {
-    flex: 1, padding: '11px 16px', border: 'none', background: 'transparent',
-    fontFamily: "'Space Mono', monospace", fontSize: '0.72rem', fontWeight: 600,
-    letterSpacing: '0.06em', cursor: 'pointer', borderRadius: 6, transition: 'all 0.18s',
-  },
-  tabInactive: { color: '#888', background: 'transparent' },
-  tabActive: { background: '#ff2020', color: '#fff', boxShadow: '0 0 14px rgba(255,32,32,0.35)' },
-  sidebar: {
-    display: 'flex', flexDirection: 'column', gap: 14,
-    position: 'sticky', top: 20,
-  },
-  footer: {
-    padding: '16px 0', borderTop: '1px solid #1e1e1e',
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    fontFamily: "'Space Mono', monospace", fontSize: '0.62rem', color: '#707070',
-  },
-  footerWarn: { color: '#b06000' },
 };
 
 export default App;

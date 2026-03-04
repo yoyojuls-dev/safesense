@@ -18,89 +18,99 @@ const Header: React.FC<HeaderProps> = ({ modelStatus, backend }) => {
   const cfg = STATUS_CONFIG[modelStatus];
 
   return (
-    <header style={styles.header}>
-      <div style={styles.logoGroup}>
-        <h1 style={styles.logo}>SafeSense</h1>
-        {/* <span style={styles.badge}>v1.0 · YOLOv8</span> */}
-      </div>
-
-      <div style={styles.statusBar}>
-        <span style={{
-          ...styles.dot,
-          background: cfg.color,
-          boxShadow: `0 0 8px ${cfg.color}`,
-          animation: cfg.pulse ? 'pulse 2s ease-in-out infinite' : 'none',
-        }} />
-        <span style={{ ...styles.statusText, color: cfg.color }}>{cfg.text}</span>
-        {backend !== '—' && backend !== 'demo' && (
-          <span style={styles.backendChip}>{backend.toUpperCase()}</span>
-        )}
-      </div>
-    </header>
+    <>
+      <style>{`
+        .ss-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 18px 0 16px;
+          border-bottom: 1px solid #252525;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .ss-logo-group {
+          display: flex;
+          align-items: baseline;
+          gap: 10px;
+          flex-shrink: 0;
+        }
+        .ss-logo {
+          font-family: 'Bebas Neue', sans-serif;
+          font-size: 2.3rem;
+          letter-spacing: 0.1em;
+          color: #ff2020;
+          text-shadow: 0 0 32px rgba(255,32,32,0.45);
+          line-height: 1;
+          margin: 0;
+        }
+        .ss-badge {
+          font-family: 'Space Mono', monospace;
+          font-size: 0.65rem;
+          color: #b0b0b0;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          padding: 3px 8px;
+          border: 1px solid #383838;
+          border-radius: 3px;
+          background: rgba(255,255,255,0.03);
+        }
+        .ss-status-bar {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-shrink: 0;
+        }
+        .ss-status-dot {
+          width: 7px; height: 7px;
+          border-radius: 50%;
+          display: inline-block;
+          flex-shrink: 0;
+        }
+        .ss-status-text {
+          font-family: 'Space Mono', monospace;
+          font-size: 0.7rem;
+          font-weight: 600;
+          letter-spacing: 0.06em;
+        }
+        .ss-backend-chip {
+          font-family: 'Space Mono', monospace;
+          font-size: 0.62rem;
+          font-weight: 700;
+          color: #00ff88;
+          padding: 2px 8px;
+          border: 1px solid rgba(0,255,136,0.3);
+          border-radius: 3px;
+          background: rgba(0,255,136,0.08);
+        }
+        @media (max-width: 480px) {
+          .ss-logo { font-size: 1.8rem; }
+          .ss-badge { display: none; }
+          .ss-status-text { font-size: 0.62rem; }
+        }
+      `}</style>
+      <header className="ss-header">
+        <div className="ss-logo-group">
+          <h1 className="ss-logo">SafeSense</h1>
+          <span className="ss-badge">v1.0 · YOLOv8</span>
+        </div>
+        <div className="ss-status-bar">
+          <span
+            className="ss-status-dot"
+            style={{
+              background: cfg.color,
+              boxShadow: `0 0 8px ${cfg.color}`,
+              animation: cfg.pulse ? 'pulse 2s ease-in-out infinite' : 'none',
+            }}
+          />
+          <span className="ss-status-text" style={{ color: cfg.color }}>{cfg.text}</span>
+          {backend !== '—' && backend !== 'demo' && (
+            <span className="ss-backend-chip">{backend.toUpperCase()}</span>
+          )}
+        </div>
+      </header>
+    </>
   );
-};
-
-const styles: Record<string, React.CSSProperties> = {
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '22px 0 18px',
-    borderBottom: '1px solid #252525',
-  },
-  logoGroup: {
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: 12,
-  },
-  logo: {
-    fontFamily: "'Bebas Neue', sans-serif",
-    fontSize: '2.3rem',
-    letterSpacing: '0.1em',
-    color: '#ff2020',
-    textShadow: '0 0 32px rgba(255,32,32,0.45)',
-    lineHeight: 1,
-    margin: 0,
-  },
-  badge: {
-    fontFamily: "'Space Mono', monospace",
-    fontSize: '0.65rem',
-    color: '#b0b0b0',           // was #444
-    letterSpacing: '0.14em',
-    textTransform: 'uppercase',
-    padding: '3px 8px',
-    border: '1px solid #383838',  // was #222
-    borderRadius: 3,
-    background: 'rgba(255,255,255,0.03)',
-  },
-  statusBar: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-  },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: '50%',
-    display: 'inline-block',
-    flexShrink: 0,
-  },
-  statusText: {
-    fontFamily: "'Space Mono', monospace",
-    fontSize: '0.7rem',
-    fontWeight: 600,
-    letterSpacing: '0.06em',
-  },
-  backendChip: {
-    fontFamily: "'Space Mono', monospace",
-    fontSize: '0.62rem',
-    fontWeight: 700,
-    color: '#00ff88',
-    padding: '2px 8px',
-    border: '1px solid rgba(0,255,136,0.3)',
-    borderRadius: 3,
-    background: 'rgba(0,255,136,0.08)',
-  },
 };
 
 export default Header;
