@@ -280,7 +280,7 @@ const App: React.FC = () => {
         </main>
 
         <footer className="ss-footer">
-          <span>SAFESENSE © 2025 — MIT License</span>
+          <span>SAFESENSE © tup.edu.ph</span>
           <span className="ss-footer-warn">⚠ Educational &amp; security research use only</span>
         </footer>
       </div>

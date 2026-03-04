@@ -28,7 +28,7 @@ interface UseWebcamReturn {
   cameraLabel: string;
 }
 
-// Smooth lerp — slides detection boxes from previous position toward new one
+// ── Lerp detection boxes smoothly ────────────────────────────────────────────
 function lerpDetections(prev: Detection[], next: Detection[], t: number): Detection[] {
   const used = new Set<number>();
   return next.map((n) => {
@@ -54,6 +54,26 @@ function lerpDetections(prev: Detection[], next: Detection[], t: number): Detect
   });
 }
 
+// ── Pick best camera without opening a temp stream ────────────────────────────
+// Uses the stream we already opened so we don't double-initialize the camera.
+function pickBestDevice(devices: MediaDeviceInfo[]): string | undefined {
+  const video = devices.filter(d => d.kind === 'videoinput');
+  if (video.length === 0) return undefined;
+  if (video.length === 1) return video[0].deviceId;
+
+  const builtIn   = /facetime|integrated|built.?in|isight|front|back|rear|internal/i;
+  const external  = /usb|external|webcam|capture|logitech|razer|elgato|cam.?link|hdmi|brio|c\d{3,4}/i;
+
+  const explicit  = video.find(d => external.test(d.label));
+  if (explicit) return explicit.deviceId;
+
+  const notBuiltIn = video.find(d => !builtIn.test(d.label));
+  if (notBuiltIn) return notBuiltIn.deviceId;
+
+  // Last device is usually external when labels are not descriptive
+  return video[video.length - 1].deviceId;
+}
+
 export function useWebcam({
   model,
   isDemoMode,
@@ -63,32 +83,40 @@ export function useWebcam({
 }: UseWebcamOptions): UseWebcamReturn {
   const videoRef         = useRef<HTMLVideoElement>(null);
   const canvasRef        = useRef<HTMLCanvasElement>(null);
-  const inferCanvasRef   = useRef<HTMLCanvasElement>(document.createElement('canvas'));
+  // Lazy offscreen canvas — created once when needed
+  const inferCanvasRef   = useRef<HTMLCanvasElement | null>(null);
   const streamRef        = useRef<MediaStream | null>(null);
   const rafRef           = useRef<number>(0);
   const inferBusyRef     = useRef(false);
+  const inferReadyRef    = useRef(false);   // delays inference until video is warm
   const lastLogTimeRef   = useRef<number>(0);
   const inferIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const warmupTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevDetsRef      = useRef<Detection[]>([]);
   const targetDetsRef    = useRef<Detection[]>([]);
   const interpTRef       = useRef<number>(1);
   const fpsCounterRef    = useRef({ frames: 0, last: performance.now() });
   const mirroredRef      = useRef(mirrored);
+  // Cache offscreen canvas size to avoid resizing every tick
+  const offscreenSizeRef = useRef({ w: 0, h: 0 });
 
-  // Keep mirroredRef in sync without restarting loops
   useEffect(() => { mirroredRef.current = mirrored; }, [mirrored]);
 
-  const [isActive,     setIsActive]     = useState(false);
-  const [fps,          setFps]          = useState(0);
-  const [error,        setError]        = useState<string | null>(null);
-  const [cameraLabel,  setCameraLabel]  = useState<string>('');
+  const [isActive,    setIsActive]    = useState(false);
+  const [fps,         setFps]         = useState(0);
+  const [error,       setError]       = useState<string | null>(null);
+  const [cameraLabel, setCameraLabel] = useState<string>('');
 
   // ── Stop ───────────────────────────────────────────────────────────────────
   const stop = useCallback(() => {
+    if (warmupTimerRef.current)   clearTimeout(warmupTimerRef.current);
     if (inferIntervalRef.current) clearInterval(inferIntervalRef.current);
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (rafRef.current)           cancelAnimationFrame(rafRef.current);
     streamRef.current?.getTracks().forEach(t => t.stop());
-    streamRef.current = null;
+    streamRef.current      = null;
+    inferReadyRef.current  = false;
+    inferBusyRef.current   = false;
+    offscreenSizeRef.current = { w: 0, h: 0 };
     setIsActive(false);
     setFps(0);
     setCameraLabel('');
@@ -97,106 +125,79 @@ export function useWebcam({
     onDetections([]);
   }, [onDetections]);
 
-  // ── Pick best camera: prefer external (USB), fall back to default ─────────
-  const getBestDeviceId = async (): Promise<string | undefined> => {
-    try {
-      // Must request permission first so labels are populated
-      const tempStream = await navigator.mediaDevices.getUserMedia({ video: true });
-      tempStream.getTracks().forEach(t => t.stop());
-
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoDevices = devices.filter(d => d.kind === 'videoinput');
-
-      if (videoDevices.length === 0) return undefined;
-
-      // Heuristics to detect external/USB cameras:
-      // - More than one camera → last one is usually the external one
-      // - Label contains keywords like "USB", "external", "webcam", "capture"
-      // - Built-in cameras typically have "facetime", "integrated", "built-in", "isight" in label
-      const builtInKeywords = /facetime|integrated|built.?in|isight|front|back|rear|internal/i;
-      const externalKeywords = /usb|external|webcam|capture|logitech|razer|elgato|cam link|hdmi|brio|c\d{3}|c\d{4}/i;
-
-      // First try: explicit external keyword match
-      const explicit = videoDevices.find(d => externalKeywords.test(d.label));
-      if (explicit) {
-        console.log('[SAFESENSE] External camera detected:', explicit.label);
-        return explicit.deviceId;
-      }
-
-      // Second try: if multiple cameras, prefer any that is NOT built-in
-      if (videoDevices.length > 1) {
-        const notBuiltIn = videoDevices.find(d => !builtInKeywords.test(d.label));
-        if (notBuiltIn) {
-          console.log('[SAFESENSE] Non-built-in camera selected:', notBuiltIn.label || notBuiltIn.deviceId);
-          return notBuiltIn.deviceId;
-        }
-        // Fall back to last device (external cameras are usually listed after built-in)
-        const last = videoDevices[videoDevices.length - 1];
-        console.log('[SAFESENSE] Falling back to last camera:', last.label || last.deviceId);
-        return last.deviceId;
-      }
-
-      // Only one camera — use it
-      console.log('[SAFESENSE] Single camera found:', videoDevices[0].label || 'default');
-      return videoDevices[0].deviceId;
-    } catch {
-      return undefined; // permission denied or no devices — let getUserMedia handle it
-    }
-  };
-
   // ── Start ──────────────────────────────────────────────────────────────────
   const start = useCallback(async () => {
     setError(null);
     try {
-      const deviceId = await getBestDeviceId();
-      const videoConstraints: MediaTrackConstraints = {
-        width:     { ideal: 1280 },
-        height:    { ideal: 720  },
-        frameRate: { ideal: 60, min: 24 },
-        ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
-      };
+      // Step 1: open with default constraints first — fast, no label lookup needed
+      const initialStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width:     { ideal: 1280 },
+          height:    { ideal: 720  },
+          frameRate: { ideal: 30, min: 15 },  // start at 30fps — less GPU pressure on warmup
+        },
+      });
 
-      const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
-      streamRef.current = stream;
+      // Step 2: now that we have permission, enumerate devices (labels are populated)
+      const devices  = await navigator.mediaDevices.enumerateDevices();
+      const bestId   = pickBestDevice(devices);
+      const currentId = initialStream.getVideoTracks()[0]
+        .getSettings().deviceId;
+
+      let finalStream = initialStream;
+
+      // Step 3: if a better camera exists and it's not already selected, switch
+      if (bestId && bestId !== currentId) {
+        initialStream.getTracks().forEach(t => t.stop());
+        finalStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            deviceId:  { exact: bestId },
+            width:     { ideal: 1280 },
+            height:    { ideal: 720  },
+            frameRate: { ideal: 30, min: 15 },
+          },
+        });
+      }
+
+      streamRef.current = finalStream;
       const video = videoRef.current!;
-      video.srcObject = stream;
+      video.srcObject = finalStream;
       await video.play();
-      setIsActive(true);
 
-      // Log which camera ended up being used
-      const track = stream.getVideoTracks()[0];
+      const track = finalStream.getVideoTracks()[0];
       setCameraLabel(track.label || 'Camera');
       console.log('[SAFESENSE] Camera started:', track.label, track.getSettings());
+
+      setIsActive(true);
+
+      // Step 4: delay inference start by 1.5s so the render loop gets smooth first
+      warmupTimerRef.current = setTimeout(() => {
+        inferReadyRef.current = true;
+      }, 1500);
+
     } catch (err) {
       console.error('[SAFESENSE] Camera error:', err);
       setError('Camera access denied or unavailable.');
     }
   }, []);
 
-  // ── Watch for device changes (plug/unplug) while camera is running ─────────
+  // ── Watch for device plug/unplug ───────────────────────────────────────────
   useEffect(() => {
     const handleDeviceChange = async () => {
-      if (!streamRef.current) return; // camera not running, ignore
-
-      const devices = await navigator.mediaDevices.enumerateDevices();
+      if (!streamRef.current) return;
+      const devices      = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(d => d.kind === 'videoinput');
       const currentTrack = streamRef.current.getVideoTracks()[0];
       const currentLabel = currentTrack?.label ?? '';
 
-      // Check if a new external camera was plugged in
-      const externalKeywords = /usb|external|webcam|capture|logitech|razer|elgato|cam link|hdmi|brio|c\d{3}|c\d{4}/i;
-      const builtInKeywords  = /facetime|integrated|built.?in|isight|front|back|rear|internal/i;
+      const external  = /usb|external|webcam|capture|logitech|razer|elgato|cam.?link|hdmi|brio|c\d{3,4}/i;
+      const builtIn   = /facetime|integrated|built.?in|isight|front|back|rear|internal/i;
+      const newExt    = videoDevices.find(d => external.test(d.label) && d.label !== currentLabel);
 
-      const newExternal = videoDevices.find(
-        d => externalKeywords.test(d.label) && !d.label.includes(currentLabel)
-      );
-      const currentIsBuiltIn = builtInKeywords.test(currentLabel);
-
-      if (newExternal && currentIsBuiltIn) {
-        // An external camera was plugged in while using built-in — switch automatically
+      if (newExt && builtIn.test(currentLabel)) {
         console.log('[SAFESENSE] External camera plugged in, switching...');
         stop();
-        setTimeout(() => start(), 300); // brief delay for OS to initialize device
+        setTimeout(() => start(), 500);
       } else if (videoDevices.length === 0) {
         stop();
       }
@@ -206,7 +207,7 @@ export function useWebcam({
     return () => navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
   }, [stop, start]);
 
-  // ── Render loop — native rAF, 60fps video + interpolated boxes ────────────
+  // ── Render loop — 60fps, draws video + lerped boxes ───────────────────────
   useEffect(() => {
     if (!isActive) return;
     const video  = videoRef.current!;
@@ -224,7 +225,6 @@ export function useWebcam({
       const ctx = canvas.getContext('2d', { alpha: false })!;
       const W = canvas.width, H = canvas.height;
 
-      // Draw video — apply mirror by flipping canvas transform
       if (mirroredRef.current) {
         ctx.save();
         ctx.translate(W, 0);
@@ -235,25 +235,17 @@ export function useWebcam({
         ctx.drawImage(video, 0, 0, W, H);
       }
 
-      // Advance lerp — 0.25 per frame = ~4 frames to fully arrive (smooth but fast)
       interpTRef.current = Math.min(1, interpTRef.current + 0.25);
       const smoothed = lerpDetections(prevDetsRef.current, targetDetsRef.current, interpTRef.current);
 
-      // Mirror detection coords when flipped so boxes stay on the right objects
       if (smoothed.length > 0) {
         if (mirroredRef.current) {
-          const flipped = smoothed.map(d => ({
-            ...d,
-            x1: W - d.x2,
-            x2: W - d.x1,
-          }));
-          drawDetections(ctx, flipped);
+          drawDetections(ctx, smoothed.map(d => ({ ...d, x1: W - d.x2, x2: W - d.x1 })));
         } else {
           drawDetections(ctx, smoothed);
         }
       }
 
-      // FPS counter
       const ctr = fpsCounterRef.current;
       ctr.frames++;
       const now = performance.now();
@@ -269,29 +261,43 @@ export function useWebcam({
     if (video.readyState >= 3) {
       rafRef.current = requestAnimationFrame(render);
     } else {
-      video.addEventListener('canplay', () => { rafRef.current = requestAnimationFrame(render); }, { once: true });
+      video.addEventListener('canplay', () => {
+        rafRef.current = requestAnimationFrame(render);
+      }, { once: true });
     }
 
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
   }, [isActive]);
 
-  // ── Inference loop — every 120ms, decoupled from render ───────────────────
+  // ── Inference loop — starts after warmup delay ────────────────────────────
   useEffect(() => {
     if (!isActive) return;
-    const video     = videoRef.current!;
-    const offscreen = inferCanvasRef.current;
-    let demoTick    = 0;
+    const video = videoRef.current!;
+    let demoTick = 0;
 
     const runDetection = async () => {
+      // Don't infer until warmup period is over
+      if (!inferReadyRef.current) return;
       if (inferBusyRef.current || !streamRef.current || video.readyState < 3) return;
       inferBusyRef.current = true;
 
-      offscreen.width  = video.videoWidth  || 1280;
-      offscreen.height = video.videoHeight || 720;
-      const octx = offscreen.getContext('2d', { alpha: false })!;
+      // Lazy-create offscreen canvas once
+      if (!inferCanvasRef.current) {
+        inferCanvasRef.current = document.createElement('canvas');
+      }
+      const offscreen = inferCanvasRef.current;
 
-      // Always feed un-mirrored frame to the model (mirrors are cosmetic only)
-      octx.drawImage(video, 0, 0, offscreen.width, offscreen.height);
+      // Only resize offscreen canvas if video dimensions changed
+      const vw = video.videoWidth  || 1280;
+      const vh = video.videoHeight || 720;
+      if (offscreenSizeRef.current.w !== vw || offscreenSizeRef.current.h !== vh) {
+        offscreen.width  = vw;
+        offscreen.height = vh;
+        offscreenSizeRef.current = { w: vw, h: vh };
+      }
+
+      const octx = offscreen.getContext('2d', { alpha: false })!;
+      octx.drawImage(video, 0, 0, vw, vh);
 
       if (model && !((window as unknown) as Record<string, unknown>)['__ssDebug']) {
         attachDebugHelper(model, offscreen);
@@ -317,20 +323,20 @@ export function useWebcam({
       targetDetsRef.current = dets;
       interpTRef.current    = 0;
 
-      // Capture thumbnail for log — only when new detections appear, throttled to 3s
+      // Thumbnail for log — throttled to 3s
       let thumbnail: string | undefined;
       const now = Date.now();
-      if (dets.length > 0 && targetDetsRef.current.length === 0 || 
-          (dets.length > 0 && now - lastLogTimeRef.current > 3000)) {
+      if (dets.length > 0 && (now - lastLogTimeRef.current > 3000)) {
         lastLogTimeRef.current = now;
         thumbnail = dc.toDataURL('image/jpeg', 0.75);
       }
 
       onDetections(dets, thumbnail);
-      inferBusyRef.current  = false;
+      inferBusyRef.current = false;
     };
 
-    inferIntervalRef.current = setInterval(runDetection, 120);
+    // 200ms interval — slightly relaxed to keep render loop smooth
+    inferIntervalRef.current = setInterval(runDetection, 200);
     return () => { if (inferIntervalRef.current) clearInterval(inferIntervalRef.current); };
   }, [isActive, model, isDemoMode, confidenceThreshold, onDetections]);
 

@@ -31,9 +31,18 @@ const Header: React.FC<HeaderProps> = ({ modelStatus, backend }) => {
         }
         .ss-logo-group {
           display: flex;
-          align-items: baseline;
+          align-items: center;
           gap: 10px;
           flex-shrink: 0;
+        }
+        .ss-logo-img {
+          height: 38px;
+          width: auto;
+          display: block;
+          filter: drop-shadow(0 0 8px rgba(255,32,32,0.5));
+        }
+        @media (max-width: 480px) {
+          .ss-logo-img { height: 28px; }
         }
         .ss-logo {
           font-family: 'Bebas Neue', sans-serif;
@@ -91,8 +100,9 @@ const Header: React.FC<HeaderProps> = ({ modelStatus, backend }) => {
       `}</style>
       <header className="ss-header">
         <div className="ss-logo-group">
+          <img src="/logos.png" alt="SafeSense Logo" className="ss-logo-img" />
           <h1 className="ss-logo">SafeSense</h1>
-          <span className="ss-badge">v1.0 · YOLOv8</span>
+          {/* <span className="ss-badge">v1.0 · YOLOv8</span> */}
         </div>
         <div className="ss-status-bar">
           <span
